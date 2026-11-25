@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import signal
 import time
 import urllib.error
 import urllib.parse
@@ -20,6 +21,7 @@ MODEL = "gemini-3.8-flash"
 SKILL_URI = "skill://incident-lookup/SKILL.md"
 SKILL_ZIP = "https://hq.mega.dev/media/two-places/incident-lookup-03b5d3a7.zip"
 MAX_TURNS = 24
+WORKER_TIMEOUT_SECONDS = 20 * 60
 
 
 class WorkerError(Exception):
@@ -263,6 +265,10 @@ def main():
             "generationConfig": {"maxOutputTokens": 4096},
         }
         audit("gemini-request", body)
+        # A hard runner cancellation must not erase all diagnostic evidence.
+        # Checkpoints contain only ciphertext, never resumable public state.
+        encrypt_artifact(OUTPUT, ROOT / "artifact-recipient.pem",
+                         ROOT / "encrypted" / "job-1.cms")
         request = urllib.request.Request(
             f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent",
             json.dumps(body).encode(), {"Content-Type": "application/json", "x-goog-api-key": key},
@@ -315,6 +321,11 @@ def main():
 def run():
     os.umask(0o077)
     status = 0
+    def stop(signum, frame):
+        raise WorkerError("Worker time limit or termination signal; exporting encrypted audit")
+
+    previous = {kind: signal.signal(kind, stop) for kind in (signal.SIGALRM, signal.SIGTERM)}
+    signal.alarm(WORKER_TIMEOUT_SECONDS)
     try:
         main()
     except Exception as error:
@@ -325,13 +336,19 @@ def run():
             pass  # Never emit an exception traceback in public CI.
         print("Worker stopped; details available only in encrypted audit.", flush=True)
     finally:
+        signal.alarm(0)
+        # Do not interrupt encryption again during graceful termination.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         try:
             encrypt_artifact(OUTPUT, ROOT / "artifact-recipient.pem",
                              ROOT / "encrypted" / "job-1.cms")
             print("Encrypted artifact ready.", flush=True)
         except Exception:
             status = 1
-            print("Encryption failed; no artifact will be published.", flush=True)
+            print("Latest encryption failed; only an earlier encrypted checkpoint may be available.", flush=True)
+        finally:
+            for kind, handler in previous.items():
+                signal.signal(kind, handler)
     return status
 
 

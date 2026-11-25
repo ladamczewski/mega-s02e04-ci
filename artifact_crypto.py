@@ -1,8 +1,10 @@
 """Authenticated CMS envelopes; private keys never leave the coordinator."""
 
 import io
+import os
 from pathlib import Path
 import subprocess
+import tempfile
 import zipfile
 
 
@@ -32,9 +34,16 @@ def encrypt_artifact(source, certificate, destination):
     encrypted = openssl(["cms", "-encrypt", "-binary", "-outform", "DER",
                          "-aes-256-gcm", str(certificate)], buffer.getvalue())
     destination.parent.mkdir(parents=True, exist_ok=True)
-    # Only a successfully completed authenticated envelope can reach upload.
-    with destination.open("xb") as stream:
-        stream.write(encrypted)
+    # Replace a prior encrypted checkpoint only after a complete envelope exists.
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=".cms-", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(encrypted)
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def decrypt_artifact(encrypted, private_key):

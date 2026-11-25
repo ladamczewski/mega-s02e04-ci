@@ -32,6 +32,13 @@ class ArtifactTests(unittest.TestCase):
             files = decrypt_artifact(encrypted, key)
             self.assertEqual(files["job-1-result.json"], proof)
             self.assertEqual(set(files), {"job-1-result.json", "audit.jsonl"})
+            encrypt_artifact(root, cert, target)
+            checkpoint = target.read_bytes()
+            self.assertEqual(decrypt_artifact(checkpoint, key), files)
+            with self.assertRaises(ValueError):
+                encrypt_artifact(root, root / "missing.pem", target)
+            self.assertEqual(target.read_bytes(), checkpoint)
+            self.assertEqual(list(root.glob(".cms-*")), [])
             for damaged in (encrypted[:-1], encrypted[:-1] + bytes([encrypted[-1] ^ 1])):
                 with self.assertRaises(ValueError):
                     decrypt_artifact(damaged, key)

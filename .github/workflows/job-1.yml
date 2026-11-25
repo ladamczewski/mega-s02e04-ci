@@ -20,7 +20,7 @@ jobs:
   incident-lookup:
     if: inputs.free_tier_confirmed && github.repository == 'ladamczewski/mega-s02e04-ci' && github.event.repository.private == false
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

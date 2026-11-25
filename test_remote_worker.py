@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import signal
 import unittest
 from unittest.mock import patch
 
@@ -92,6 +93,19 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(opened.call_count, 2)
         self.assertEqual([c.args[0] for c in sleep.call_args_list], [3])
         self.assertEqual(audit.call_count, 2)
+
+    def test_deadline_exports_audit_and_restores_signal_handlers(self):
+        import contextlib
+        previous = signal.getsignal(signal.SIGALRM)
+        with patch.object(worker, "main", side_effect=lambda: signal.raise_signal(signal.SIGALRM)), \
+                patch.object(worker, "audit") as audit, \
+                patch.object(worker, "encrypt_artifact") as encrypt, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(worker.run(), 1)
+        self.assertEqual(signal.getsignal(signal.SIGALRM), previous)
+        self.assertEqual(audit.call_args.args[0], "worker-failure")
+        self.assertIn("time limit", audit.call_args.args[1]["message"])
+        encrypt.assert_called_once()
 
     def test_credentials_reject_untrusted_host(self):
         with self.assertRaises(worker.WorkerError):

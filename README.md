@@ -24,8 +24,9 @@ No scheduled or push-triggered runs are configured. Do not enable paid fallbacks
 The model is pinned to `gemini-3.8-flash`, advertised with free input/output on
 2026-11-24. A model's free-tier eligibility does not make requests free on a
 billed Google project. The script cannot verify the project's billing status.
-Quota failures stop the worker; there is no paid fallback. The run has a 12-minute
-timeout and 24-model-turn limit. No third-party Python packages are installed.
+Quota failures stop the worker; there is no paid fallback. The worker has a
+20-minute time budget inside a 25-minute workflow limit, plus a 24-model-turn
+limit. No third-party Python packages are installed.
 Each Gemini request allows at most four attempts for server/network failures,
 with waits of 10, 25 and 60 seconds. The same request and conversation are kept
 within that run; this is not a restart of the worker or a replay of job tools.
@@ -45,7 +46,11 @@ with OpenSSL CMS AES-256-GCM and the RSA public certificate in
 plus the audit log. Masking alone does not make the audit safe to publish.
 The private RSA key stays exclusively on the coordinator machine; never add it
 to GitHub, Actions secrets, logs or artifacts. Retention is one day. Encryption
-failure or timeout never uploads plaintext. Public logs contain progress only;
+failure or timeout never uploads plaintext. An encrypted audit checkpoint is
+atomically replaced before each Gemini request, so a hard cancellation can leave
+diagnostics from before the interrupted request. Checkpoints do not resume work
+and do not prove completion. Graceful termination exports the latest audit.
+Public logs contain progress only;
 HTTP bodies and exception details are restricted to the encrypted audit.
 The coordinator authenticates/decrypts the envelope and validates the captured
 submit response locally before merging with job-2. Success in CI is not a course
