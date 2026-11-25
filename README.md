@@ -26,6 +26,11 @@ The model is pinned to `gemini-3.8-flash`, advertised with free input/output on
 billed Google project. The script cannot verify the project's billing status.
 Quota failures stop the worker; there is no paid fallback. The run has a 12-minute
 timeout and 24-model-turn limit. No third-party Python packages are installed.
+Each Gemini request allows at most four attempts for server/network failures,
+with waits of 10, 25 and 60 seconds. The same request and conversation are kept
+within that run; this is not a restart of the worker or a replay of job tools.
+Quota/authentication failures are not retried. Course requests keep their
+existing limit of one retry. A new workflow run starts a new worker session.
 
 ## Worker behavior and evidence
 

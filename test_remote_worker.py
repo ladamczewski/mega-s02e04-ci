@@ -62,6 +62,37 @@ class WorkerTests(unittest.TestCase):
                 worker.open_request(None)
         self.assertNotIn("do-not-expose", str(caught.exception))
 
+    def test_gemini_transient_failures_have_bounded_backoff(self):
+        import urllib.error
+        def unavailable():
+            return urllib.error.HTTPError("https://example.test", 503, "busy", {}, io.BytesIO(b"busy"))
+        response = FakeResponse(b'{}')
+        with patch.object(worker.OPENER, "open", side_effect=[unavailable(), unavailable(), unavailable(), response]) as opened, \
+                patch.object(worker, "audit"), patch.object(worker.time, "sleep") as sleep:
+            self.assertIs(worker.open_request(None, retry_delays=(10, 25, 60)), response)
+        self.assertEqual(opened.call_count, 4)
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [10, 25, 60])
+
+    def test_quota_failure_never_retries(self):
+        import urllib.error
+        error = urllib.error.HTTPError("https://example.test", 429, "quota", {}, io.BytesIO(b"quota"))
+        with patch.object(worker.OPENER, "open", side_effect=error) as opened, \
+                patch.object(worker, "audit"), patch.object(worker.time, "sleep") as sleep:
+            with self.assertRaises(worker.WorkerError):
+                worker.open_request(None, retry_delays=(10, 25, 60))
+        self.assertEqual(opened.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_course_network_failure_keeps_single_retry(self):
+        import urllib.error
+        with patch.object(worker.OPENER, "open", side_effect=urllib.error.URLError("offline")) as opened, \
+                patch.object(worker, "audit") as audit, patch.object(worker.time, "sleep") as sleep:
+            with self.assertRaises(worker.WorkerError):
+                worker.open_request(None)
+        self.assertEqual(opened.call_count, 2)
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [3])
+        self.assertEqual(audit.call_count, 2)
+
     def test_credentials_reject_untrusted_host(self):
         with self.assertRaises(worker.WorkerError):
             worker.MCP("https://untrusted.example/mcp/job/test")

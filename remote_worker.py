@@ -66,23 +66,25 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 OPENER = urllib.request.build_opener(NoRedirect)
 
 
-def open_request(request):
-    # At most one retry for a service failure; never retry quota/auth failures.
-    for attempt in range(2):
+def open_request(request, retry_delays=(3,)):
+    # Course calls keep one retry. Gemini may opt into longer bounded backoff.
+    # Quota/auth failures are never retried, and no model fallback is allowed.
+    for attempt in range(len(retry_delays) + 1):
         try:
             return OPENER.open(request, timeout=100)
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
             audit("http-error", {"status": error.code, "body": body})
-            if error.code >= 500 and attempt == 0:
-                time.sleep(3)
+            if error.code >= 500 and attempt < len(retry_delays):
+                time.sleep(retry_delays[attempt])
                 continue
             raise WorkerError(f"HTTP {error.code}; details saved in encrypted audit") from None
-        except (urllib.error.URLError, TimeoutError):
-            if attempt == 0:
-                time.sleep(3)
+        except (urllib.error.URLError, TimeoutError) as error:
+            audit("network-error", {"type": type(error).__name__, "message": str(error)})
+            if attempt < len(retry_delays):
+                time.sleep(retry_delays[attempt])
                 continue
-            raise WorkerError("Network failure after one retry") from None
+            raise WorkerError("Network failure after bounded retries") from None
 
 
 def parse_rpc(response, request_id):
@@ -265,7 +267,7 @@ def main():
             f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent",
             json.dumps(body).encode(), {"Content-Type": "application/json", "x-goog-api-key": key},
         )
-        with open_request(request) as response:
+        with open_request(request, retry_delays=(10, 25, 60)) as response:
             generated = json.load(response)
         audit("gemini-response", generated)
         candidates = generated.get("candidates", [])
