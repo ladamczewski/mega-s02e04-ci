@@ -1,0 +1,41 @@
+name: Remote job-1 (Gemini free tier)
+
+on:
+  workflow_dispatch:
+    inputs:
+      free_tier_confirmed:
+        description: 'I confirm Gemini billing is disabled and this repository is public'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mega-s02e04-job-1
+  cancel-in-progress: false
+
+jobs:
+  incident-lookup:
+    if: inputs.free_tier_confirmed && github.repository == 'ladamczewski/mega-s02e04-ci' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Run independent Gemini worker
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          JOB_MCP_URL: ${{ secrets.JOB_1_MCP_URL }}
+          FREE_TIER_CONFIRMED: ${{ inputs.free_tier_confirmed }}
+        run: python3 remote_worker.py
+      - name: Upload authenticated ciphertext only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: job-1-result-${{ github.run_id }}
+          path: encrypted/job-1.cms
+          retention-days: 1
+          if-no-files-found: warn

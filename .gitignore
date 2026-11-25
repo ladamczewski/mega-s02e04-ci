@@ -1,0 +1,9 @@
+.private/
+logs/
+results/
+encrypted/
+__pycache__/
+.venv/
+.env
+local-worker/
+.agents/
