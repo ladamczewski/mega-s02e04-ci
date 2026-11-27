@@ -17,7 +17,7 @@ from artifact_crypto import encrypt_artifact
 
 ROOT = Path(__file__).resolve().parent
 OUTPUT = ROOT / "results"
-MODEL = "gemini-3.8-flash"
+MODEL = "gemini-3.6-flash"
 SKILL_URI = "skill://incident-lookup/SKILL.md"
 SKILL_ZIP = "https://hq.mega.dev/media/two-places/incident-lookup-03b5d3a7.zip"
 MAX_TURNS = 24

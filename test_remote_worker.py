@@ -16,6 +16,9 @@ class FakeResponse(io.BytesIO):
 
 
 class WorkerTests(unittest.TestCase):
+    def test_model_is_pinned_to_approved_free_tier_candidate(self):
+        self.assertEqual(worker.MODEL, "gemini-3.6-flash")
+
     def test_json_rpc(self):
         response = FakeResponse(b'{"id":1,"result":{"ok":true}}')
         self.assertEqual(worker.parse_rpc(response, 1)["result"], {"ok": True})

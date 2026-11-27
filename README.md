@@ -21,8 +21,10 @@ confirmation only after confirming no Gemini billing. The workflow is restricted
 to public `ladamczewski/mega-s02e04-ci` on the standard `ubuntu-latest` runner.
 No scheduled or push-triggered runs are configured. Do not enable paid fallbacks.
 
-The model is pinned to `gemini-3.8-flash`, advertised with free input/output on
-2026-11-24. A model's free-tier eligibility does not make requests free on a
+The model is pinned to `gemini-3.6-flash`, advertised with free input/output on
+2026-11-27. The owner approved this change after repeated overload errors from
+`gemini-3.8-flash`; availability of the replacement is not guaranteed.
+A model's free-tier eligibility does not make requests free on a
 billed Google project. The script cannot verify the project's billing status.
 Quota failures stop the worker; there is no paid fallback. The worker has a
 20-minute time budget inside a 25-minute workflow limit, plus a 24-model-turn
